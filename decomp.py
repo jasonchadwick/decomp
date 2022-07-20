@@ -7,8 +7,8 @@ import numpy as np
 from scipy import linalg
 from functools import reduce
 import itertools
-import utils.idx
-from utils.gates import *
+import qc_utils.idx
+from qc_utils.gates import *
 import time
 import copy
 
@@ -138,8 +138,8 @@ class Decomposer():
                         cbits = list(cbits)
                         cbits_before = cbits[:tgt]
                         cbit_after = cbits[tgt:]
-                        idx0 = utils.idx.idx_from_bits(cbits_before + [0] + cbit_after)
-                        idx1 = utils.idx.idx_from_bits(cbits_before + [1] + cbit_after)
+                        idx0 = qc_utils.idx.idx_from_bits(cbits_before + [0] + cbit_after)
+                        idx1 = qc_utils.idx.idx_from_bits(cbits_before + [1] + cbit_after)
 
                         single_mat = np.zeros((2,2), complex)
                         single_mat[0,0] = mat[idx0,idx0]
@@ -182,7 +182,7 @@ class Decomposer():
     # input: target bit index, control bit string, and single-qubit 2x2 matrix
     def convert_to_cx(self, tgt, cbits, mat):
         cnx = XGate().control(self.nbits-1)
-        a,A,B,C = utils.gates.ABC(mat)
+        a,A,B,C = qc_utils.gates.ABC(mat)
         ctrls = list(range(self.nbits))
         ctrls = ctrls[:tgt]+ctrls[tgt+1:]
         for i,c in enumerate(cbits):
@@ -205,7 +205,7 @@ class Decomposer():
         # WORSE METHOD: try to decompose explicitly
         nbits = len(cbits)
         cnx = XGate().control(nbits-1)
-        a,A,B,C = utils.gates.ABC(mat)
+        a,A,B,C = qc_utils.gates.ABC(mat)
         ctrls = list(range(nbits))
         ctrls = ctrls[:tgt]+ctrls[tgt+1:]+[tgt]
         for i,c in enumerate(cbits):
@@ -264,7 +264,7 @@ class Decomposer():
         prev_tgt = 0
         prev_cbits = np.ones(self.nbits)
         for j,(tgt,cbits,mat,_) in enumerate(reversed(self.cu_gates)):
-            a,A,B,C = utils.gates.ABC(mat)
+            a,A,B,C = qc_utils.gates.ABC(mat)
             if self.isidentity(B):
                 print('NO')
             ctrls = list(range(self.nbits))

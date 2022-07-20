@@ -1,3 +1,6 @@
 [submodule "QASMBench"]
 	path = QASMBench
 	url = git@github.com:pnnl/QASMBench.git
+[submodule "qc_utils"]
+	path = qc_utils
+	url = git@github.com:jasonchadwick/qc-utils.git
