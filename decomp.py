@@ -180,51 +180,91 @@ class Decomposer():
 
     # convert a controlled unitary to a sequence of CnZ gates and single-qubit rotations
     # input: target bit index, control bit string, and single-qubit 2x2 matrix
-    def convert_to_cx(self, tgt, cbits, mat):
-        cnx = XGate().control(self.nbits-1)
-        a,A,B,C = qc_utils.gates.ABC(mat)
-        ctrls = list(range(self.nbits))
-        ctrls = ctrls[:tgt]+ctrls[tgt+1:]
+    def convert_to_cx_optim(self, tgt, cbits, cnx, cnx1, ctrls, A, B, C, a):
+        combined_x = np.logical_not(np.equal(cbits, prev_cbits))#np.logical_xor(np.equal(cbits, np.zeros(self.nbits)), np.equal(prev_cbits, np.zeros(self.nbits)))
+        if j > 0:
+            ctrls_prev = list(range(self.nbits))
+            ctrls_prev = ctrls_prev[:prev_tgt]+ctrls_prev[prev_tgt+1:]
+            if np.sum(combined_x) == 1 and self.nbits > 2:
+                ctrls_prev.remove(list(combined_x).index(1))
+                self.circuit.append(cnx1, ctrls_prev + [self.areg[0]])
+                self.total_cnx += 1
+            else:
+                self.circuit.append(cnx, ctrls_prev + [self.areg[0]])
+                self.total_cnx += 1
+
+        for i,c in enumerate(cbits):
+            if c != prev_cbits[i]:
+                self.circuit.x(i)
+        
+        if j > 0 and np.sum(combined_x) == 1 and self.nbits > 2:
+            pass
+        else:
+            self.circuit.append(cnx, ctrls + [self.areg[0]])
+            self.total_cnx += 1
+
+        if not self.isidentity(C):
+            self.circuit.unitary(C, tgt, label='C')
+
+        if self.isidentity(B):
+            pass
+        elif np.all(np.isclose(B, X)):
+            self.circuit.x(tgt)
+        else:
+            self.circuit.cx(self.areg[0], tgt)
+            self.circuit.unitary(B, tgt, label='B')
+            self.circuit.cx(self.areg[0], tgt)
+            self.total_cx += 2
+
+        if not self.isidentity(A):
+            self.circuit.unitary(A, tgt, label='A')
+
+        if not np.isclose(a, 0) or np.isclose(a, 2*np.pi):
+            self.circuit.p(a, self.areg[0])
+
+        prev_tgt = tgt
+        prev_cbits = cbits
+
+    def convert_to_cx_inplace(self, tgt, cbits, cnx, ctrls, A, B, C, a):
         for i,c in enumerate(cbits):
             if i != tgt and c == 0:
                 self.circuit.x(i)
-        self.circuit.append(cnx, ctrls + [self.areg[0]])
         self.circuit.unitary(C, tgt, label='C')
-        self.circuit.cx(self.areg[0], tgt)
+        self.circuit.append(cnx, ctrls + [tgt])
         self.circuit.unitary(B, tgt, label='B')
-        self.circuit.cx(self.areg[0], tgt)
-        self.circuit.unitary(A, tgt, label='A')
-        self.circuit.p(a, self.areg[0])
-        self.circuit.append(cnx, ctrls + [self.areg[0]])
-        self.total_cx += 2
-        self.total_cnx += 2
-        for i,c in enumerate(cbits):
-            if i != tgt and c == 0:
-                self.circuit.x(i)
-        return
-        # WORSE METHOD: try to decompose explicitly
-        nbits = len(cbits)
-        cnx = XGate().control(nbits-1)
-        a,A,B,C = qc_utils.gates.ABC(mat)
-        ctrls = list(range(nbits))
-        ctrls = ctrls[:tgt]+ctrls[tgt+1:]+[tgt]
-        for i,c in enumerate(cbits):
-            if i != tgt and c == 0:
-                self.circuit.x(i)
-        self.circuit.unitary(C, tgt, label='C')
-        self.circuit.append(cnx, ctrls)
-        self.circuit.unitary(B, tgt, label='B')
-        self.circuit.append(cnx, ctrls)
+        self.circuit.append(cnx, ctrls + [tgt])
         self.circuit.unitary(A, tgt, label='A')
         self.total_cx += 2
         if not np.isclose(a, 0):
-            self.circuit.append(cnx, ctrls)
+            self.circuit.append(cnx, ctrls + [tgt])
             self.circuit.unitary(u3(0,-a,0).conjugate().transpose(), tgt, label='Ua^t')
-            self.circuit.append(cnx, ctrls)
+            self.circuit.append(cnx, ctrls + [tgt])
             self.circuit.unitary(u3(0,-a,0), tgt, label='Ua')
-            self.circuit.append(PhaseGate(2*a).control(nbits-1), ctrls)
+            self.circuit.append(PhaseGate(2*a).control(self.nbits-1), ctrls + [tgt])
             self.total_cx += 2
-            self.total_cp += 1
+            #self.total_cp += 1
+        for i,c in enumerate(cbits):
+            if i != tgt and c == 0:
+                self.circuit.x(i)
+
+    def convert_to_cx_inplace_optim(self, tgt, cbits, cnx, ctrls, A, B, C, a):
+        for i,c in enumerate(cbits):
+            if i != tgt and c == 0:
+                self.circuit.x(i)
+        self.circuit.unitary(C, tgt, label='C')
+        self.circuit.append(cnx, ctrls + [tgt])
+        self.circuit.unitary(B, tgt, label='B')
+        self.circuit.append(cnx, ctrls + [tgt])
+        self.circuit.unitary(A, tgt, label='A')
+        self.total_cx += 2
+        if not np.isclose(a, 0):
+            self.circuit.append(cnx, ctrls + [tgt])
+            self.circuit.unitary(u3(0,-a,0).conjugate().transpose(), tgt, label='Ua^t')
+            self.circuit.append(cnx, ctrls + [tgt])
+            self.circuit.unitary(u3(0,-a,0), tgt, label='Ua')
+            self.circuit.append(PhaseGate(2*a).control(self.nbits-1), ctrls + [tgt])
+            self.total_cx += 2
+            #self.total_cp += 1
         for i,c in enumerate(cbits):
             if i != tgt and c == 0:
                 self.circuit.x(i)
@@ -270,50 +310,10 @@ class Decomposer():
             ctrls = list(range(self.nbits))
             ctrls = ctrls[:tgt]+ctrls[tgt+1:]
             if self.optimize:
-                combined_x = np.logical_not(np.equal(cbits, prev_cbits))#np.logical_xor(np.equal(cbits, np.zeros(self.nbits)), np.equal(prev_cbits, np.zeros(self.nbits)))
-                if j > 0:
-                    ctrls_prev = list(range(self.nbits))
-                    ctrls_prev = ctrls_prev[:prev_tgt]+ctrls_prev[prev_tgt+1:]
-                    if np.sum(combined_x) == 1 and self.nbits > 2:
-                        ctrls_prev.remove(list(combined_x).index(1))
-                        self.circuit.append(cnx1, ctrls_prev + [self.areg[0]])
-                        self.total_cnx += 1
-                    else:
-                        self.circuit.append(cnx, ctrls_prev + [self.areg[0]])
-                        self.total_cnx += 1
-
-                for i,c in enumerate(cbits):
-                    if c != prev_cbits[i]:
-                        self.circuit.x(i)
-                
-                if j > 0 and np.sum(combined_x) == 1 and self.nbits > 2:
-                    pass
-                else:
-                    self.circuit.append(cnx, ctrls + [self.areg[0]])
-                    self.total_cnx += 1
-
-                if not self.isidentity(C):
-                    self.circuit.unitary(C, tgt, label='C')
-
-                if self.isidentity(B):
-                    pass
-                elif np.all(np.isclose(B, X)):
-                    self.circuit.x(tgt)
-                else:
-                    self.circuit.cx(self.areg[0], tgt)
-                    self.circuit.unitary(B, tgt, label='B')
-                    self.circuit.cx(self.areg[0], tgt)
-                    self.total_cx += 2
-
-                if not self.isidentity(A):
-                    self.circuit.unitary(A, tgt, label='A')
-
-                if not np.isclose(a, 0) or np.isclose(a, 2*np.pi):
-                    self.circuit.p(a, self.areg[0])
-
-                prev_tgt = tgt
-                prev_cbits = cbits
+                self.convert_to_cx_optim(tgt, cbits, cnx, cnx1, ctrls, A, B, C, a)
             else:
+                self.convert_to_cx_inplace(tgt, cbits, cnx, ctrls, A, B, C, a)
+                continue
                 for i,c in enumerate(cbits):
                     if i != tgt and c == 0:
                         self.circuit.x(i)
